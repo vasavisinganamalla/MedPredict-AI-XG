@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Diabetes Readmission Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; }
+        .card { background: rgba(255, 255, 255, 0.9); padding: 25px; border-radius: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+        h2 { color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        input, select { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: var(--accent); color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; cursor: pointer; font-size: 1.1em; margin-top: 10px; font-weight: bold; }
+        .dashboard { display: flex; flex-direction: column; gap: 20px; }
+        #resultCard { text-align: center; display: none; border: 2px solid var(--accent); }
+        .risk-high { color: #e74c3c; font-weight: bold; font-size: 1.5em; }
+        .risk-low { color: #27ae60; font-weight: bold; font-size: 1.5em; }
+        #riskChart { max-height: 300px !important; }
+        .section-title { font-size: 1rem; color: var(--accent); margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h2>Patient Assessment</h2>
+            <form id="predictionForm">
+                <p class="section-title">Personal Information</p>
+                <div class="form-group"><label>Patient Name</label><input type="text" name="patient_name" placeholder="Full Name" required></div>
+                <div class="form-group"><label>Country</label><input type="text" name="country" placeholder="India" required></div>
+                
+                <p class="section-title">Clinical Vitals</p>
+                <div class="row" style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;"><label>Gender</label>
+                        <select name="gender"><option value="Male">Male</option><option value="Female">Female</option></select>
+                    </div>
+                    <div class="form-group" style="flex: 1;"><label>Race</label>
+                       <div class="form-group">
+    <select name="race">
+        <option value="Caucasian">Caucasian</option>
+        <option value="AfricanAmerican">AfricanAmerican</option>
+        <option value="Asian">Asian</option>
+        <option value="Hispanic">Hispanic</option>
+        <option value="Other">Other</option>
+    </select>
+    </div>
+                    </div>
+                </div>
+                <div class="form-group"><label>Age Group</label>
+                    <select name="age_group"><option value="Elderly">Elderly</option><option value="Middle-aged">Middle-aged</option><option value="Young">Young</option></select>
+                </div>
+                <div class="form-group"><label>Time in Hospital (Days)</label><input type="number" name="time_in_hospital" value="5" required></div>
+                <div class="form-group"><label>Past Inpatient Visits</label><input type="number" name="number_inpatient" value="0" required></div>
+                <div class="form-group">
+               <label>Primary Diagnosis (Diag 1)</label>
+               <select name="diag_1">
+               <option value="Diabetes">Diabetes</option>
+               <option value="Circulatory">Circulatory</option>
+               <option value="Respiratory">Respiratory</option>
+               <option value="Digestive">Digestive</option>
+               <option value="Other">Other</option>
+               </select>
+               </div>
+                <input type="hidden" name="num_lab_procedures" value="40">
+                <input type="hidden" name="num_procedures" value="1"><input type="hidden" name="num_medications" value="15">
+                <input type="hidden" name="number_outpatient" value="0"><input type="hidden" name="number_emergency" value="0">
+                <input type="hidden" name="diag_2" value="Diabetes"><input type="hidden" name="diag_3" value="Other">
+                <input type="hidden" name="metformin" value="No"><input type="hidden" name="insulin" value="Yes">
+                <input type="hidden" name="change" value="No"><input type="hidden" name="diabetesMed" value="Yes">
+                
+                <button type="submit">Analyze Risk</button>
+            </form>
+            <div style="text-align: center; margin-top: 15px;"><a href="/records" style="color: #3498db; text-decoration: none; font-size: 0.9em;">📋 View Saved History</a></div>
+        </div>
+
+        <div class="dashboard">
+            <div class="card" id="resultCard">
+                <h2>Analysis Result</h2>
+                <p id="riskLabel"></p>
+                <h3 id="probLabel"></h3>
+            </div>
+            <div class="card">
+                <h2>Risk Analysis Chart</h2>
+                <canvas id="riskChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let myChart;
+        window.onload = () => {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: ['Awaiting Data'], datasets: [{ data: [100], backgroundColor: ['#bdc3c7'] }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        };
+
+        document.getElementById('predictionForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            try {
+                const response = await fetch('/predict', { method: 'POST', body: formData });
+                const data = await response.json();
+                if(data.status === 'success') {
+                    document.getElementById('resultCard').style.display = 'block';
+                    const label = document.getElementById('riskLabel');
+                    label.innerText = data.result;
+                    label.className = data.result === "High Risk" ? "risk-high" : "risk-low";
+                    document.getElementById('probLabel').innerText = data.probability + "% Probability";
+                    updateChart(data.probability);
+                } else { alert("Error: " + data.message); }
+            } catch (err) { alert("Server Error!"); }
+        };
+
+        function updateChart(prob) {
+            myChart.data.labels = ['Risk', 'Stable'];
+            myChart.data.datasets[0].data = [prob, 100 - prob];
+            myChart.data.datasets[0].backgroundColor = ['#e74c3c', '#2ecc71'];
+            myChart.update();
+        }
+    </script>
+</body>
+</html>
